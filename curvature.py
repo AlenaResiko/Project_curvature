@@ -207,8 +207,15 @@ class scalar_curvature_est:
         density = kde.density()
         return density
     
-    def estimate_all(self, rmax, k = 0):
+    def estimate_all(self, rmin = None, rmax = None, rs = None, version = 1):
+        # TO DO- parallelize this
+        Cs = [self.fit_quad_coeff(i, rmin, rmax, rs, version) for i in range(self.N)]
+        Ss = [-6*(self.n + 2)*C for C in Cs]
+        return Ss
+        
+    def estimate_with_averaging(self, rmax, k = 0):
         # k: number of neighbors to average ball_ratios over
+        # TO DO- allow user to input sequence rs
         self.k = k
         
         #self.compute_ball_ratio_seqs(rmax)
@@ -217,7 +224,8 @@ class scalar_curvature_est:
         
         self.rmax = rmax
         with mp.Pool(mp.cpu_count()) as p:
-            Cs = p.map(self.fit_quad_coeff_helper, [i for i in range(self.N)])
+            Cs = p.map(self.fit_quad_coeff_helper, np.arange(self.N))
+            
         Ss = [-6*(self.n + 2)*C for C in Cs]
         return Ss
         
