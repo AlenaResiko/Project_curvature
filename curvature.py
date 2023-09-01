@@ -318,23 +318,6 @@ class scalar_curvature_est:
             return Ss, errs
         else:
             return Ss
-        
-#     def estimate_all(self, rmax, rmin = None, version = 2, with_error = False, avg_k = 0):
-#         if with_error:
-#             Cs = []
-#             errs = []
-#             for i in range(self.N):
-#                 C, err = self.fit_quad_coeff(i, rmax, rmin, version, with_error, avg_k)
-#                 Cs.append(C)
-#                 errs.append(err)
-#         else:
-#             Cs = [self.fit_quad_coeff(i, rmax, rmin, version, with_error, avg_k) for i in range(self.N)]
-        
-#         Ss = [-6*(self.n + 2)*C for C in Cs]
-#         if with_error:
-#             return Ss, errs
-#         else:
-#             return Ss
     
     def fit_quad_coeff(self, i, rmax, rmin = None, version = 2, with_error = False, avg_k = 0):
         '''
