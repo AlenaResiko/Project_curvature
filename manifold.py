@@ -13,6 +13,7 @@ class Sphere:
     
     def Rdist(n, x1, x2):
         # x1, x2: two points on unit n-sphere
+        # output: geodesic distance between x1 and x2
         dotprod = sum([x1[i]*x2[i] for i in range(n+1)])
         Rdist = np.arccos(dotprod)
         return Rdist
@@ -20,6 +21,7 @@ class Sphere:
     def Rdist_array(n, X):
         # n: sphere dimension
         # X: point cloud (rows are observations)
+        # output: distance matrix
         N = X.shape[0]
         Rdist = np.zeros((N, N))
         for i in range(N):
@@ -60,15 +62,27 @@ class Sphere:
 
 class Euclidean:
     
-    def sample(N, n, R):
-        # sample N points in a ball of radius R in R^n
+    def sample(N, n, R, Rsmall = None):
+        # If Rsmall = None, sample N points in an n-ball of radius R
+        # Otherwise, sample points in an n-ball of radius R until you get N points within an n-ball of radius Rsmall < R
         X = []
-        for i in range(N):
-            x = np.random.normal(size = n)
-            u = (R**n)*np.random.random()
-            r = u**(1/n)
-            x *= r/np.linalg.norm(x)
-            X.append(x)
+        if Rsmall is None:
+            for i in range(N):
+                x = np.random.normal(size = n)
+                u = (R**n)*np.random.random()
+                r = u**(1/n)
+                x *= r/np.linalg.norm(x)
+                X.append(x)
+        else:
+            Nsmall = 0
+            while Nsmall < N:
+                x = np.random.normal(size = n)
+                u = (R**n)*np.random.random()
+                r = u**(1/n)
+                x *= r/np.linalg.norm(x) # now the norm of x is r
+                X.append(x)
+                if r < Rsmall: Nsmall += 1
+                
         return np.array(X)
 
     def density(n, R):
@@ -172,6 +186,10 @@ class PoincareDisk:
             theta = np.arccos(x/(R*np.tanh(r/(2*R))))
             X.append([r, theta])
         return X
+    
+    def norm(x, K = -1):
+        assert K < 0, "K must be negative"
+        return PoincareDisk.Rdist(np.array([0, 0]), x, K = K)
         
     def polar_to_cartesian(X, K = -1):
         R = 1/math.sqrt(-K)
@@ -235,9 +253,13 @@ class Hyperboloid:
     def det_g(a, c, u):
         return (a**4)*(u**2) + a**2*(u**2 + 1)*c**2
     
-    def sample(N, a, c, B, within_halfB = False):
+    def sample(N, a = 2, c = 1, B = 2, within_halfB = True):
         # if within_halfB = False, then sample N points from the hyperboloid with u in [-B, B]
         # if within_halfB = True, then sample points uniformly from u in [-B, B] until there are at least N points with u in [-.5B, .5B]
+        print(within_halfB)
+        print("a = ", a)
+        print("c = ", c)
+        print("B = ", B)
         sqrt_max_det_g = math.sqrt(Hyperboloid.det_g(a, c, B))
         us = []
         thetas = []
@@ -252,11 +274,12 @@ class Hyperboloid:
                 us.append(u)
                 thetas.append(theta)
                 if (within_halfB and -.5*B <= u <= .5*B) or (not within_halfB):
-                    i +=1
-        xs = [a*math.cos(thetas[i])*math.sqrt(us[i]**2 + 1) for i in range(N)]
-        ys = [a*math.sin(thetas[i])*math.sqrt(us[i]**2 + 1) for i in range(N)]
-        zs = [c*us[i] for i in range(N)]
-        X = np.array([[xs[i], ys[i], zs[i]] for i in range(N)])
+                    i += 1
+       
+        xs = [a*math.cos(thetas[i])*math.sqrt(u**2 + 1) for i, u in enumerate(us)]
+        ys = [a*math.sin(thetas[i])*math.sqrt(u**2 + 1) for i, u in enumerate(us)]
+        zs = [c*u for i, u in enumerate(us)]
+        X = np.array([[x, ys[i], zs[i]] for i, x in enumerate(xs)])
         return X
 
     def area(a, c, B):
@@ -267,6 +290,27 @@ class Hyperboloid:
     def S(z):
         # actual scalar curvature at z when a = b = 2 and c = 1
         return -2/((5*z**2 + 1)**2)
+
+##############################################################################
+# Computing neighbor distance matrices
+##############################################################################
+def nbr_distance_matrices(Rdist):
+    '''
+    Rdist: (N x N) numpy array. (i, j)th entry is estimated (or exact) geodesic distance between ith and jth points
+       
+    Returns:
+    T: (N x N) numpy array. (i, j)th entry = Rdist from X_i to its jth nearest neighbor (where 0th nearest neighbor is X_i)
+    nbr_matrix: (N x N) numpy array. (i, j)th entry = index of jth nearest neighbor to X_i (entry (i, 0) is i for all i).
+    '''
+    N = Rdist.shape[0]
+    nbr_matrix = np.empty((N, N))
+    T = np.empty((N, N))
+    for i in range(N):
+        nbr_matrix[i, :] = np.argsort(Rdist[i, :])
+        T[i, :] = [Rdist[i, int(j)] for j in nbr_matrix[i, :]]
+        if i%1000 == 0: print(i)
+    return T, nbr_matrix
+
 
 ##############################################################################
 # 3d plotting
@@ -296,13 +340,19 @@ def _set_axes_radius(ax, origin, radius):
     ax.set_ylim3d([y - radius, y + radius])
     ax.set_zlim3d([z - radius, z + radius])
     
-def plot_3d(X, vals = None):
+def plot_3d(X, vals = None, s = None):
     fig = plt.figure()
     ax = plt.axes(projection='3d')
     if vals is None:
-        p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = X[:, 2]) # color according to z-coordinate
+        if s is None:
+            p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = X[:, 2]) # color according to z-coordinate
+        else:
+            p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = X[:, 2], s = s) # color according to z-coordinate
     else:
-        p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = vals)
+        if s is None:
+            p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = vals)
+        else:
+            p = ax.scatter(X[:, 0], X[:, 1], X[:, 2], c = vals, s = s)
     ax.set_box_aspect([1,1,1])
     set_axes_equal(ax)
     fig.colorbar(p)
