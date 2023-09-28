@@ -1,5 +1,5 @@
 # curvature
-Scalar curvature estimation using the method in our paper:
+Scalar curvature estimation using the method in paper:
 
 "An Intrinsic Approach to Scalar-Curvature Estimation for Point Clouds" (https://arxiv.org/abs/2308.02615)
 A. Hickok and A. J. Blumberg
@@ -9,3 +9,4 @@ See tutorial.ipynb for some examples. The data files for the tutorial are stored
 https://drive.google.com/drive/folders/188mm2Qcm6ewHWXCChpk6ZSL1BRGjxZTy?usp=sharing
 
 and then moved to the example_data folder.
+Sampling code by Alena Chan
